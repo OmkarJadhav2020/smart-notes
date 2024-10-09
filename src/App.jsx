@@ -1,214 +1,250 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import Draggable from 'react-draggable';
+import { SWATCHES } from './constants';
 
-function App() {
-  const canvasRef = useRef(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [linewidth, setLineWidth] = useState(3);
-  const [strokeColor, setStrokeColor] = useState("white");
-  const [dictOfVars, setDictOfVars] = useState({});
-  const [result, setResult] = useState();
+export default function Home() {
+    const canvasRef = useRef(null);
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [color, setColor] = useState('rgb(255, 255, 255)');
+    const [reset, setReset] = useState(false);
+    const [dictOfVars, setDictOfVars] = useState({});
+    const [result, setResult] = useState(null);
+    const [latexPosition, setLatexPosition] = useState({ x: 10, y: 200 });
+    const [latexExpression, setLatexExpression] = useState([]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight - canvas.offsetTop;
-        ctx.lineCap = "round";
-        canvas.style.background = "black";
-      }
-    }
-  }, []);
-
-  const getPosition = (e) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    if (e.touches) {
-      return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top,
-      };
-    } else {
-      return {
-        x: e.nativeEvent.offsetX,
-        y: e.nativeEvent.offsetY,
-      };
-    }
-  };
-
-  const startDrawing = (e) => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        const { x, y } = getPosition(e);
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        setIsDrawing(true);
-      }
-    }
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-
-  const draw = (e) => {
-    if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        const { x, y } = getPosition(e);
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = linewidth;
-        ctx.lineTo(x, y);
-        ctx.stroke();
-      }
-    }
-  };
-
-  const resetCanvas = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-    }
-  };
-
-  const runRoute = async () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const response = await axios({
-        method: 'post',
-        url: `${import.meta.env.VITE_API_URL}/calculate`,
-        data: {
-          image: canvas.toDataURL('image/png'),
-          dict_of_vars: dictOfVars,
-        },
-      });
-
-      const resp = await response.data;
-      console.log('Response', resp);
-      resp.data.forEach((data) => {
-        if (data.assign === true) {
-          setDictOfVars({
-            ...dictOfVars,
-            [data.expr]: data.result,
-          });
+    useEffect(() => {
+        if (latexExpression.length > 0 && window.MathJax) {
+            setTimeout(() => {
+                window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub]);
+            }, 0);
         }
-      });
+    }, [latexExpression]);
 
-      const ctx = canvas.getContext('2d');
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      let minX = canvas.width,
-        minY = canvas.height,
-        maxX = 0,
-        maxY = 0;
-
-      for (let y = 0; y < canvas.height; y++) {
-        for (let x = 0; x < canvas.width; x++) {
-          const i = (y * canvas.width + x) * 4;
-          if (imageData.data[i + 3] > 0) {
-            minX = Math.min(minX, x);
-            minY = Math.min(minY, y);
-            maxX = Math.max(maxX, x);
-            maxY = Math.max(maxY, y);
-          }
+    useEffect(() => {
+        if (result) {
+            renderLatexToCanvas(result.expression, result.answer);
         }
-      }
+    }, [result]);
 
-      const centerX = (minX + maxX) / 2;
-      const centerY = (minY + maxY) / 2;
+    useEffect(() => {
+        if (reset) {
+            resetCanvas();
+            setLatexExpression([]);
+            setResult(null);
+            setDictOfVars({});
+            setReset(false);
+        }
+    }, [reset]);
 
-      resp.data.forEach((data) => {
-        setTimeout(() => {
-          setResult({
-            expression: data.expr,
-            answer: data.result,
-          });
-        }, 1000);
-      });
-    }
-  };
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight - canvas.offsetTop;
+                ctx.lineCap = 'round';
+                ctx.lineWidth = 3;
+            }
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_CHTML';
+        script.async = true;
+        document.head.appendChild(script);
 
-  return (
-    <>
-      <canvas
-        onMouseDown={startDrawing}
-        onMouseUp={stopDrawing}
-        onMouseOut={stopDrawing}
-        onMouseMove={draw}
-        onTouchStart={startDrawing}
-        onTouchEnd={stopDrawing}
-        onTouchMove={draw}
-        ref={canvasRef}
-        className="w-full h-full bg-black"
-      ></canvas>
+        script.onload = () => {
+            window.MathJax.Hub.Config({
+                tex2jax: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+            });
+        };
 
-      <div className="fixed top-5 left-5 p-5 bg-gray-800 rounded-lg shadow-lg">
-        <h3 className="text-white mb-3">Choose a color:</h3>
-        <div className="flex mb-4">
-          <button
-            onClick={() => setStrokeColor("yellow")}
-            className="rounded-full bg-yellow-400 mx-2 h-10 w-10"
-          ></button>
-          <button
-            onClick={() => setStrokeColor("blue")}
-            className="rounded-full bg-blue-400 mx-2 h-10 w-10"
-          ></button>
-          <button
-            onClick={() => setStrokeColor("green")}
-            className="rounded-full bg-green-400 mx-2 h-10 w-10"
-          ></button>
-          <button
-            onClick={() => setStrokeColor("red")}
-            className="rounded-full bg-red-400 mx-2 h-10 w-10"
-          ></button>
-          <button
-            onClick={() => setStrokeColor("white")}
-            className="rounded-full bg-white mx-2 h-10 w-10"
-          ></button>
-          <button
-            onClick={() => setStrokeColor("purple")}
-            className="rounded-full bg-purple-400 mx-2 h-10 w-10"
-          ></button>
+        return () => {
+            document.head.removeChild(script);
+        };
+    }, []);
+
+    const renderLatexToCanvas = (expression, answer) => {
+        const latex = `\\(\\LARGE{${expression} = ${answer}}\\)`;
+        setLatexExpression([...latexExpression, latex]);
+
+        // Clear the main canvas
+        const canvas = canvasRef.current;
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+    };
+
+    const resetCanvas = () => {
+        const canvas = canvasRef.current;
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+    };
+
+    const startDrawing = (e) => {
+        const canvas = canvasRef.current;
+        if (canvas) {
+            canvas.style.background = 'black';
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.beginPath();
+                const { offsetX, offsetY } = getMousePos(canvas, e);
+                ctx.moveTo(offsetX, offsetY);
+                setIsDrawing(true);
+            }
+        }
+    };
+
+    const draw = (e) => {
+        if (!isDrawing) {
+            return;
+        }
+        const canvas = canvasRef.current;
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                const { offsetX, offsetY } = getMousePos(canvas, e);
+                ctx.strokeStyle = color;
+                ctx.lineTo(offsetX, offsetY);
+                ctx.stroke();
+            }
+        }
+    };
+
+    const stopDrawing = () => {
+        setIsDrawing(false);
+    };
+
+    const getMousePos = (canvas, event) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        return { offsetX: x, offsetY: y };
+    };
+
+    // Touch event handlers
+    const handleTouchStart = (e) => {
+        e.preventDefault();
+        startDrawing(e.touches[0]);
+    };
+
+    const handleTouchMove = (e) => {
+        e.preventDefault();
+        draw(e.touches[0]);
+    };
+
+    const runRoute = async () => {
+        const canvas = canvasRef.current;
+
+        if (canvas) {
+            const response = await axios({
+                method: 'post',
+                url: `${import.meta.env.VITE_API_URL}/calculate`,
+                data: {
+                    image: canvas.toDataURL('image/png'),
+                    dict_of_vars: dictOfVars
+                }
+            });
+
+            const resp = await response.data;
+            console.log('Response', resp);
+            resp.data.forEach((data) => {
+                if (data.assign === true) {
+                    setDictOfVars({
+                        ...dictOfVars,
+                        [data.expr]: data.result
+                    });
+                }
+            });
+
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
+
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const i = (y * canvas.width + x) * 4;
+                    if (imageData.data[i + 3] > 0) {  // If pixel is not transparent
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            setLatexPosition({ x: centerX, y: centerY });
+            resp.data.forEach((data) => {
+                setTimeout(() => {
+                    setResult({
+                        expression: data.expr,
+                        answer: data.result
+                    });
+                }, 200);
+            });
+        }
+    };
+
+    return (
+        <div className="relative w-full h-screen bg-gray-900 text-white overflow-hidden">
+            <div className="grid grid-cols-3 gap-2 p-4">
+                <button
+                    onClick={() => setReset(true)}
+                    className="z-20 bg-black text-white py-2 px-4 rounded hover:bg-gray-700 transition"
+                >
+                    Reset
+                </button>
+                <div className="z-20 flex space-x-2">
+                    {SWATCHES.map((swatch) => (
+                        <div
+                            key={swatch}
+                            className="w-8 h-8 rounded-full cursor-pointer hover:scale-110 transition"
+                            style={{ backgroundColor: swatch }}
+                            onClick={() => setColor(swatch)}
+                        />
+                    ))}
+                </div>
+                <button
+                    onClick={runRoute}
+                    className="z-20 bg-black text-white py-2 px-4 rounded hover:bg-gray-700 transition"
+                >
+                    Run
+                </button>
+            </div>
+            <canvas
+                ref={canvasRef}
+                id="canvas"
+                className="absolute top-0 left-0 w-full h-full bg-black"
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseOut={stopDrawing}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={stopDrawing}
+            />
+
+            {latexExpression.map((latex, index) => (
+                <Draggable
+                    key={index}
+                    defaultPosition={latexPosition}
+                    onStop={(e, data) => setLatexPosition({ x: data.x, y: data.y })}
+                >
+                    <div className="absolute p-2 text-white rounded shadow-md">
+                        <div className="latex-content">{latex}</div>
+                    </div>
+                </Draggable>
+            ))}
         </div>
-
-        <p className="text-white mt-2">Current Stroke Color: {strokeColor.toUpperCase()}</p>
-
-        <h3 className="text-white mb-2">Brush Size:</h3>
-        <input
-          type="range"
-          min={1}
-          max={20}
-          value={linewidth}
-          onChange={(e) => setLineWidth(e.target.value)}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-        />
-        <p className="text-white mt-2">Current Line Width: {linewidth}px</p>
-
-        {/* Add buttons for Reset and Run API */}
-        <button
-          onClick={resetCanvas}
-          className="bg-red-500 text-white px-4 py-2 rounded mt-4"
-        >
-          Reset Canvas
-        </button>
-
-        <button
-          onClick={runRoute}
-          className="bg-green-500 text-white px-4 py-2 rounded mt-4 ml-4"
-        >
-          Run API
-        </button>
-      </div>
-    </>
-  );
+    );
 }
-
-export default App;

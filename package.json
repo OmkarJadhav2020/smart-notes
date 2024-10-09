@@ -10,9 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/mathjax": "^0.0.40",
     "axios": "^1.7.7",
+    "mathjax": "^3.2.2",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-draggable": "^4.4.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.11.1",
