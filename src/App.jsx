@@ -8,10 +8,13 @@ export default function Home() {
     const [isDrawing, setIsDrawing] = useState(false);
     const [color, setColor] = useState('rgb(255, 255, 255)');
     const [reset, setReset] = useState(false);
+    const [strokeSize, setStrokeSize] = useState(3);
     const [dictOfVars, setDictOfVars] = useState({});
     const [result, setResult] = useState(null);
     const [latexPosition, setLatexPosition] = useState({ x: 10, y: 200 });
     const [latexExpression, setLatexExpression] = useState([]);
+    const [showMenu, setShowMenu] = useState(false);
+    const [isEraser, setIsEraser] = useState(false);
 
     useEffect(() => {
         if (latexExpression.length > 0 && window.MathJax) {
@@ -45,7 +48,7 @@ export default function Home() {
                 canvas.width = window.innerWidth;
                 canvas.height = window.innerHeight - canvas.offsetTop;
                 ctx.lineCap = 'round';
-                ctx.lineWidth = 3;
+                ctx.lineWidth = strokeSize;
             }
         }
         const script = document.createElement('script');
@@ -62,13 +65,12 @@ export default function Home() {
         return () => {
             document.head.removeChild(script);
         };
-    }, []);
+    }, [strokeSize]);
 
     const renderLatexToCanvas = (expression, answer) => {
         const latex = `\\(\\LARGE{${expression} = ${answer}}\\)`;
         setLatexExpression([...latexExpression, latex]);
 
-        // Clear the main canvas
         const canvas = canvasRef.current;
         if (canvas) {
             const ctx = canvas.getContext('2d');
@@ -91,7 +93,6 @@ export default function Home() {
     const startDrawing = (e) => {
         const canvas = canvasRef.current;
         if (canvas) {
-            canvas.style.background = 'black';
             const ctx = canvas.getContext('2d');
             if (ctx) {
                 ctx.beginPath();
@@ -112,6 +113,7 @@ export default function Home() {
             if (ctx) {
                 const { offsetX, offsetY } = getMousePos(canvas, e);
                 ctx.strokeStyle = color;
+                ctx.lineWidth = strokeSize;
                 ctx.lineTo(offsetX, offsetY);
                 ctx.stroke();
             }
@@ -129,7 +131,6 @@ export default function Home() {
         return { offsetX: x, offsetY: y };
     };
 
-    // Touch event handlers
     const handleTouchStart = (e) => {
         e.preventDefault();
         startDrawing(e.touches[0]);
@@ -139,6 +140,8 @@ export default function Home() {
         e.preventDefault();
         draw(e.touches[0]);
     };
+
+    const toggleMenu = () => setShowMenu(!showMenu);
 
     const runRoute = async () => {
         const canvas = canvasRef.current;
@@ -154,7 +157,6 @@ export default function Home() {
             });
 
             const resp = await response.data;
-            console.log('Response', resp);
             resp.data.forEach((data) => {
                 if (data.assign === true) {
                     setDictOfVars({
@@ -171,7 +173,7 @@ export default function Home() {
             for (let y = 0; y < canvas.height; y++) {
                 for (let x = 0; x < canvas.width; x++) {
                     const i = (y * canvas.width + x) * 4;
-                    if (imageData.data[i + 3] > 0) {  // If pixel is not transparent
+                    if (imageData.data[i + 3] > 0) {
                         minX = Math.min(minX, x);
                         minY = Math.min(minY, y);
                         maxX = Math.max(maxX, x);
@@ -195,36 +197,81 @@ export default function Home() {
         }
     };
 
+    const activateEraser = () => {
+        setColor('rgb(0, 0, 0)');
+        setIsEraser(true);
+    };
+
+    const deactivateEraser = () => {
+        setIsEraser(false);
+    };
+
     return (
         <div className="relative w-full h-screen bg-gray-900 text-white overflow-hidden">
-            <div className="grid grid-cols-3 gap-2 p-4">
+            <div className="absolute top-4 left-4 z-20 flex items-center space-x-4">
                 <button
-                    onClick={() => setReset(true)}
-                    className="z-20 bg-black text-white py-2 px-4 rounded hover:bg-gray-700 transition"
+                    onClick={toggleMenu}
+                    className="bg-black text-white py-2 px-4 rounded hover:bg-gray-700 transition"
                 >
-                    Reset
+                    {showMenu ? 'Close Menu' : 'Open Menu'}
                 </button>
-                <div className="z-20 flex space-x-2">
-                    {SWATCHES.map((swatch) => (
-                        <div
-                            key={swatch}
-                            className="w-8 h-8 rounded-full cursor-pointer hover:scale-110 transition"
-                            style={{ backgroundColor: swatch }}
-                            onClick={() => setColor(swatch)}
-                        />
-                    ))}
-                </div>
+
                 <button
                     onClick={runRoute}
-                    className="z-20 bg-black text-white py-2 px-4 rounded hover:bg-gray-700 transition"
+                    className="bg-green-600 text-white py-2 px-4 rounded hover:bg-green-800 transition"
                 >
                     Run
                 </button>
             </div>
+
+            {showMenu && (
+                <div className="absolute top-16 left-4 z-20 bg-gray-800 rounded p-4 mt-2 space-y-4 transition transform duration-500">
+                    <button
+                        onClick={() => setReset(true)}
+                        className="w-full bg-red-600 py-2 rounded hover:bg-red-800 transition"
+                    >
+                        Reset
+                    </button>
+                    <div className="w-full space-y-2">
+                        <label htmlFor="strokeSize">Stroke Size</label>
+                        <input
+                            type="range"
+                            id="strokeSize"
+                            min="1"
+                            max="20"
+                            value={strokeSize}
+                            onChange={(e) => setStrokeSize(e.target.value)}
+                            className="w-full"
+                        />
+                    </div>
+                    <button
+                        onClick={activateEraser}
+                        onMouseEnter={activateEraser}
+                        onMouseLeave={deactivateEraser}
+                        className="w-full bg-white text-black py-2 rounded hover:bg-gray-300 transition"
+                    >
+                        Eraser
+                    </button>
+                    <div className="grid grid-cols-5 gap-2">
+                        {SWATCHES.map((swatch) => (
+                            <div
+                                key={swatch}
+                                className="w-8 h-8 rounded-full cursor-pointer hover:scale-110 transition"
+                                style={{ backgroundColor: swatch }}
+                                onClick={() => {
+                                    setColor(swatch);
+                                    deactivateEraser();
+                                }}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <canvas
                 ref={canvasRef}
                 id="canvas"
-                className="absolute top-0 left-0 w-full h-full bg-black"
+                className={`absolute top-0 left-0 w-full h-full bg-black ${isEraser ? 'cursor-pointer' : 'cursor-crosshair'}`}
                 onMouseDown={startDrawing}
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
